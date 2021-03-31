@@ -16,29 +16,51 @@ from scipy import integrate
 from sys import exit
 
 
-class SVAnalysis():
-    def __init__(self, data):
-        self.voltage, self.current = data
+class SCVAnalysis:
+    '''
+    Single voltammetry analysis. Takes Cyclic voltammetry obj as inpyut
+    '''
+    def __init__(self, source, cycle):
+        self._cv_obj = source # CyclicVoltammetry object
+        self.voltage = source[cycle]['Vf'].to_numpy()
+        self.current = source[cycle]['Im'].to_numpy()
+        self.times = source[cycle]['T'].to_numpy()
+        
+        # These will be initialized with self._split
         self.ox_voltage = None
         self.ox_current = None
         self.red_voltage = None
         self.red_current = None
 
-        self._split()
-
+        self._split() 
+        
+        # Capacitive fit and find peak current
         self.anode_data = self.peak_current(self.ox_voltage, self.ox_current,
                                             'anode')
         self.cathode_data = self.peak_current(self.red_voltage, self.red_current,
                                             'cathode')
-        
+        # Charge, ip(c,a) ratio, etc
         self.cv_data = {}
 
         self._charge()
 
-        self.plot(self.anode_data)
-        self.plot(self.cathode_data)
+        #self.plot(self.anode_data)
+        #self.plot(self.cathode_data)
+        
+    def _split(self):
+        # find maxima in voltage and split voltage and current in two arrays
+        # at that point
+        split = np.argmax(self.voltage) +1
+        self.ox_voltage = self.voltage[:split]
+        self.ox_current = self.current[:split]
+        self.ox_times = self.times[:split]
+        
+        self.red_voltage = self.voltage[split:]
+        self.red_current = self.current[split:]
+        self.red_times = self.times[split:]
         
     def ip_ratio(self):
+        # computes ipc/ipa ratio
         ip_a = self.anode_data['peak current']
         ip_c = abs(self.cathode_data['peak current'])
         
@@ -47,11 +69,12 @@ class SVAnalysis():
         return ip_c/ip_a
     
     def _charge(self):
+        # integrate area within i vs time to get the charge
         self.anode_data['charge'] = a = integrate.trapezoid(self.ox_current,
-                                                        x=self.ox_voltage)
+                                                        x=self.ox_times)
                                                         
         self.cathode_data['charge'] = c = integrate.trapezoid(self.red_current,
-                                                        x=-self.red_voltage)
+                                                        x=-self.red_times)
         
         self.cv_data['charge ratio'] = c/a
         self.cv_data['charge difference'] = a-c
@@ -62,8 +85,7 @@ class SVAnalysis():
         mode = data['mode']
         peak = data['current maxval']
         fit = data['capacitive fit']
-        peak_pos= data['peak voltage']
-        
+        peak_pos= data['peak voltage']        
         
         plt.rcParams.update({'font.size': 12})
         plt.rc('legend',fontsize=9) 
@@ -82,13 +104,14 @@ class SVAnalysis():
             
         plt.plot(volt, curr,label = mode)
 
-        # ranges
+        # ranges for capacitive fit line
         if mode == 'anode':
             volt_min = np.amin(volt)
         else:
             volt_min = np.amax(volt)
         volt_max = peak_pos
 
+        # build line
         def line(x, a, b): return a*x + b
         x = np.linspace(volt_min, volt_max, 2)
         y = line(x, fit[0], fit[1])
@@ -100,16 +123,12 @@ class SVAnalysis():
                  color='orange', label = r'$i_{p,c}$ '+mode)
 
         plt.legend()
-        plt.show()
-
-    def _split(self):
-        split = np.argmax(self.voltage) +1
-        self.ox_voltage = self.voltage[:split]
-        self.ox_current = self.current[:split]
-        self.red_voltage = self.voltage[split:]
-        self.red_current = self.current[split:]        
+        plt.show()    
         
-    def _maximas(self, arr, ave = 1, gauss = None):
+    def _maximas(self, arr, ave = 1, gauss = None, prominence = 0.0001):
+        # Find maximas of an array
+        # The array can be processed with block average and gaussian smoothing
+        # Maximas are found based on the prominence parameter
         n_points = len(arr)
         rounded = n_points - (n_points % ave)
         arr = arr[:rounded]
@@ -126,7 +145,7 @@ class SVAnalysis():
     def peak_current(self, in_volt, in_curr, mode, 
                        average = 10, d2_limit = 10, group_thr = 0.15):
         
-        # reduce array lenght to divisible number by average
+        # shorten array lenght to divisible by average for block average
         n_points = len(in_volt)
         trim = n_points - (n_points % average)
         
@@ -180,7 +199,7 @@ class SVAnalysis():
         curr_thr = (np.amax(curr_d2)-np.amin(curr_d2))/10.0
 
 
-        # Find clusters of data where each point is closer than group_thr
+        # Find clusters of data where each point is within volt/curr threshold
         clusters = utils.grouping(volt_base, curr_d2_base, volt_thr, curr_thr,
                                   order = 'size-decremental')
                         
@@ -207,12 +226,58 @@ class SVAnalysis():
                 'fit data indexes': cap_idx,
                 'current 1st der': curr_d1,
                 'current 2nd der': curr_d2,
+                'volt grouping thr': volt_thr,
+                'curr grouping thr': curr_thr
                 }
         
         
         return data
     
-    def integrate(self):
-        pass
+class CCVAnalysis:
+    '''
+    Collective CV Analysis - analysis of multiple cyclic voltammetries. Take 
+    voltammetry reading and index of the required voltammetry.
+    '''
+    def __init__(self, cv_obj, index_list):
+        self.cv_objs = cv_obj # CyclicVoltammetry objects
+        self.index_list = index_list
+        self.n_cv = len(self.cv_objs)
+        
+        self.SCVA_list = self._analyze()
+        
+        #for elem in self.SCVA_list:
+            #print(elem.anode_data['peak current'])
+        
+        self.randles_sevcik(2,3,1)
+    def _analyze(self):
+        SCVA_list = []
+        
+        for i in range(self.n_cv):
+            obj = self.cv_objs[i]
+            curve = self.index_list[i]
+            SCVA_list.append(SCVAnalysis(obj, curve))
+        
+        return SCVA_list
     
+    def randles_sevcik(self, n_elec, area, conc, T = 25, plot = False):
+        # constants
+        R = 8.31446261815324 # J K-1 mol-1
+        F = 96485.3321233 # C mol-1
+        T = T + 273.15
+        K = 0.4463*F**1.5*(1/(R*T))**0.5
+        
+        denom = K * n_elec**1.5 * area * conc
+    
+        # computes diffusion for each cyclic voltammetry
+        for analysis in self.SCVA_list:
+            ips = analysis.anode_data['peak current']
+            v_rate = analysis._cv_obj.settings['scan rate']
+            diff = ips/(denom*v_rate**0.5)
+            print(diff)
+    
+        if plot:
+            pass
+        
+        pass
+        
 
