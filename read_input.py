@@ -9,6 +9,7 @@ import pandas as pd
 import re
 import matplotlib.pyplot as plt
 from os import path
+import os
 
 # %% Reads MPT or DTA to common data structure
 
@@ -23,51 +24,109 @@ class CyclicVoltammetry:
 
     def _load_cv(self):
         # choose input parser based on file extension
-        extension = path.splitext(self.filepath)[1]
+        filename = os.path.basename(self.filepath)
+        root = path.splitext(filename)[0]
+        extension = path.splitext(filename)[1]
 
         if extension.lower() == ".dta":
             self.settings["format"] = "Gamry"
+            # self.settings['folder'] = ''
+            self.settings["filename"] = filename
+            self.settings["file_rootname"] = root
+            self.settings["extension"] = "dta"
             self._read_DTA()
         if extension.lower() == ".mpt":
-            self._read_MPT()
             self.settings["format"] = "Biologic"
+            self.settings["filename"] = filename
+            self.settings["extension"] = "mpt"
+            self.settings["file_rootname"] = root
+            self._read_MPT()
+        if extension.lower() == "":
+            print("No file selected")
 
     def _read_DTA(self):
         # only consider data after label CURVE\d and ignore CURVEOCV
         is_it_curve = re.compile("CURVE\d")
         with open(self.filepath, "r", encoding="utf8", errors="ignore") as f:
-            curves = []
-            curveN = -1
-
             iterator = iter(f)  # iterator avoids checking settings after header
 
             # headers for self.settings dict
+            row_idx = 0
             for line in iterator:
+                row_idx += 1
                 if "SCANRATE" in line:
                     scanrate = line.replace(",", ".").split("\t")[2]
                     self.settings["scan rate"] = float(scanrate)
+                elif "VLIMIT1" in line:
+                    vlimit_i = line.replace(",", ".").split("\t")[2]
+                    self.settings["initial voltage"] = float(vlimit_i)
+                elif "VLIMIT2" in line:
+                    vlimit_f = line.replace(",", ".").split("\t")[2]
+                    self.settings["final voltage"] = float(vlimit_f)
+                elif "INSTRUMENTVERSION" in line:    
                     break
 
-            # read CV data
-            for line in iterator:
-                if is_it_curve.match(line):
-                    curveN += 1
-                    next(f)
-                    next(f)
-                    continue
-                if curveN >= 0:
-                    line_float = [
-                        float(ele)
-                        for ele in line.strip().replace(",", ".").split("\t")[0:7]
-                    ]
-                    curves.append([curveN] + line_float)
+            file_format = None
+            header = None
 
-            self.settings["n cycles"] = curveN
-            header = ["Cycle", "Pt", "T", "Vf", "Im", "Vu", "Sig0", "Ach"]
-            # just keep the relevant ones and use cycle num as vertical key
-            useful_keys = ["Cycle", "T", "Vf", "Im"]
-            self.data = pd.DataFrame(curves, columns=header)[useful_keys]
-            self.data.set_index("Cycle", inplace=True)
+            for line in iterator:
+                row_idx += 1
+                if "OCVCURVE" in line:
+                    continue
+                elif "CURVE" in line:
+                    if "CURVE	TABLE" in line:
+                        file_format = "Single table"
+                        header = next(f)
+                        header_units = next(f)
+                        break
+                    elif is_it_curve.match(line):
+                        file_format = "Multiple tables"
+                        next(f)
+                        next(f)
+                        break
+
+            # DTA can come in two formats...
+            useful_keys = ["Cycle n", "T", "Vf", "Im"]
+
+            if file_format == "Single table":
+                header = header.replace("Cycle\n", "Cycle n")
+                header = header.split("\t")
+                self.data = pd.read_csv(
+                    self.filepath,
+                    sep="\t",
+                    skiprows=row_idx + 2,
+                    names=header,
+                    decimal=",",
+                )
+                self.data = self.data.drop(self.data.columns[0], axis=1)
+                uniques = self.data["Cycle n"].value_counts()  #
+                self.settings["n_cycles"] = len(uniques)
+
+                self.data = self.data[useful_keys]
+                self.data.set_index("Cycle n", inplace=True)
+                return
+            else:
+                curves = []
+                curveN = 0
+                # read CV data, multiple tables
+                for line in iterator:
+                    if is_it_curve.match(line):
+                        curveN += 1
+                        next(f)
+                        next(f)
+                        continue
+                    if curveN >= 0:
+                        line_float = [
+                            float(ele)
+                            for ele in line.strip().replace(",", ".").split("\t")[0:7]
+                        ]
+                        curves.append([curveN] + line_float)
+
+                self.settings["n_cycles"] = curveN + 1
+                header = ["Cycle n", "Pt", "T", "Vf", "Im", "Vu", "Sig0", "Ach"]
+                # just keep the relevant ones and use cycle num as vertical key
+                self.data = pd.DataFrame(curves, columns=header)[useful_keys]
+                self.data.set_index("Cycle n", inplace=True)
 
     def _plot(self, cycle):
         curr = self[cycle]["Im"]
@@ -116,6 +175,15 @@ class CyclicVoltammetry:
 
         """
         return self.data.__repr__()
+        # return self.filepath
+
+    def __str__(self):
+        return self.filepath
+
+    def __iter__(self):
+        # return pd table filtered by cycle number as in __getitem__
+        for cycle in range(self.settings["n_cycles"]):
+            yield self.data.loc[cycle]
 
     def _current_dens(self, area):
         self.data["Idens"] = self.data["Im"] * 1000 / area

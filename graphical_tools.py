@@ -8,7 +8,7 @@ Created on Thu Apr  8 15:45:19 2021
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
-from sklearn.metrics import r2_score
+#from sklearn.metrics import r2_score
 
 from scipy.optimize import curve_fit
 
@@ -249,9 +249,9 @@ class LineFit(RangeSelectBase):
             self.params, _ = curve_fit(line, data[mask][:, 0], data[mask][:, 1])
             print(r_squared(data[mask][:,1], data[mask][:,0], self.params[0], self.params[1]))
             
-            p_x = line(data[mask][:,0], self.params[0], self.params[1])
+            #p_x = line(data[mask][:,0], self.params[0], self.params[1])
             
-            print(r2_score(data[mask][:,1], p_x))
+            #print(r2_score(data[mask][:,1], p_x))
             
             fit_x1 = data[mask][0][0]
 

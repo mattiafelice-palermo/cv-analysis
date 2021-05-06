@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter1d
 from scipy.optimize import curve_fit
 from scipy import integrate
+import sys
+import traceback
 
 from utils import find_maximas, grouping
 from graphical_tools import MaxMinFinder, LineFit
@@ -42,6 +44,8 @@ class ElectrodeData:
     ip: float = None
     work_mode: str = None
     fit_mode: str = None
+    auto_success: bool = False
+    error: BaseException = None
     peak_base: float = None
     current_max: float = None
     peak_volt: float = None
@@ -107,51 +111,16 @@ class SCVAnalysis:
 
     def compute_ip(self, work_mode="both", automatic=True):
         if automatic:
-            # Automatic capacitive fit and find peak current current
-
-            if work_mode in ("anode", "both"):
-                self.anode_data = self.automatic_ip(
-                    self.ox_voltage, self.ox_current, "anode", "weighted-pos reverse"
-                )
-            if work_mode in ("cathode", "both"):
-                self.cathode_data = self.automatic_ip(
-                    self.red_voltage, self.red_current, "cathode", "weighted-pos"
-                )
+            self._auto_ip(work_mode)
+            # print(
+            #     type(self.anode_data.error),
+            #     self.anode_data.error,
+            #     self._cv_obj.filepath,
+            # )
+            # print(sys.exc_info()[2])
 
         if not automatic:
-            if work_mode in ("anode", "both"):
-                peak_finder = MaxMinFinder(self.ox_voltage, self.ox_current, "max")
-                max_coord, max_idx = peak_finder.run()
-                cap_fit = LineFit(self.ox_voltage, self.ox_current, max_coord)
-                fit_mask, ip_base, fit_params = cap_fit.run()
-                self.anode_data = ElectrodeData(
-                    ip=max_coord[1] - ip_base,
-                    work_mode=work_mode,
-                    fit_mode="graphic",
-                    peak_base=ip_base,
-                    current_max=max_coord[1],
-                    peak_volt=max_coord[0],
-                    peak_index=max_idx,
-                    capacitive_fit=fit_params,
-                    fit_data_bool=fit_mask,
-                )
-
-            if work_mode in ("cathode", "both"):
-                peak_finder = MaxMinFinder(self.red_voltage, self.red_current, "min")
-                max_coord, max_idx = peak_finder.run()
-                cap_fit = LineFit(self.red_voltage, self.red_current, max_coord)
-                fit_mask, ip_base, fit_params = cap_fit.run()
-                self.cathode_data = ElectrodeData(
-                    ip=max_coord[1] - ip_base,
-                    work_mode=work_mode,
-                    fit_mode="graphic",
-                    peak_base=ip_base,
-                    current_max=max_coord[1],
-                    peak_volt=max_coord[0],
-                    peak_index=max_idx,
-                    capacitive_fit=fit_params,
-                    fit_data_bool=fit_mask,
-                )
+            self._graphic_ip(work_mode)
 
         # Charge, ip(c,a) ratio, etc
 
@@ -161,17 +130,87 @@ class SCVAnalysis:
         # self.plot(self.cathode_data)
         # self.ip_ratio()
 
+    def _auto_ip(self, work_mode="both"):
+        if work_mode in ("anode", "both"):
+            try:
+                self.anode_data = self.automatic_ip(
+                    self.ox_voltage, self.ox_current, "anode", "weighted-pos reverse"
+                )
+            except Exception as ex:
+                tb_text = traceback.format_exc()
+                self.anode_data = ElectrodeData(error=tb_text)
+        if work_mode in ("cathode", "both"):
+            try:
+                self.cathode_data = self.automatic_ip(
+                    self.red_voltage, self.red_current, "cathode", "weighted-pos"
+                )
+            except Exception as ex:
+                tb_text = traceback.format_exc()
+                self.cathode_data = ElectrodeData(error=tb_text)
+
+    def _graphic_ip(self, work_mode="both"):
+        if work_mode in ("anode", "both"):
+            print(work_mode)
+            peak_finder = MaxMinFinder(self.ox_voltage, self.ox_current, "max")
+            max_coord, max_idx = peak_finder.run()
+            cap_fit = LineFit(self.ox_voltage, self.ox_current, max_coord)
+            fit_mask, ip_base, fit_params = cap_fit.run()
+            self.anode_data = ElectrodeData(
+                ip=max_coord[1] - ip_base,
+                work_mode=work_mode,
+                fit_mode="graphic",
+                peak_base=ip_base,
+                current_max=max_coord[1],
+                peak_volt=max_coord[0],
+                peak_index=max_idx,
+                capacitive_fit=fit_params,
+                fit_data_bool=fit_mask,
+            )
+
+        if work_mode in ("cathode", "both"):
+            print(work_mode)
+            peak_finder = MaxMinFinder(self.red_voltage, self.red_current, "min")
+            max_coord, max_idx = peak_finder.run()
+            cap_fit = LineFit(self.red_voltage, self.red_current, max_coord)
+            fit_mask, ip_base, fit_params = cap_fit.run()
+            self.cathode_data = ElectrodeData(
+                ip=max_coord[1] - ip_base,
+                work_mode=work_mode,
+                fit_mode="graphic",
+                peak_base=ip_base,
+                current_max=max_coord[1],
+                peak_volt=max_coord[0],
+                peak_index=max_idx,
+                capacitive_fit=fit_params,
+                fit_data_bool=fit_mask,
+            )
+
     def _split(self):
         # find maxima in voltage and split voltage and current in two arrays
         # at that point
-        split = np.argmax(self.voltage) + 1
-        self.ox_voltage = self.voltage[:split]
-        self.ox_current = self.current[:split]
-        self.ox_times = self.times[:split]
+        settings = self._cv_obj.settings
+        voltage_diff = settings['final voltage'] - settings['initial voltage']
+        
+        voltage = self.voltage
+        current= self.current
+        times = self.times
+        
+        if voltage_diff < 0:
+            split = np.argmin(self.voltage) + 1
+            voltage = np.flip(voltage)
+            current = np.flip(current)
+            times = np.flip(times)
+            
+        else:
+            split = np.argmax(self.voltage) + 1
+       
+        self.ox_voltage = voltage[:split]
+        self.ox_current = current[:split]
+        self.ox_times = times[:split]
 
-        self.red_voltage = self.voltage[split:]
-        self.red_current = self.current[split:]
-        self.red_times = self.times[split:]
+        self.red_voltage = voltage[split:]
+        self.red_current = current[split:]
+        self.red_times = times[split:]
 
     def ip_ratio(self):
         # computes ipc/ipa ratio
@@ -269,11 +308,21 @@ class SCVAnalysis:
         # index is relative to the original, non averaged array
         if mode == "anode":
             peaks = find_maximas(in_curr, 5, 1)  # 5, 1 were found empirically
-            peak_idx = peaks[0]
+            try:
+                peak_idx = peaks[0]
+            except IndexError as error:
+                raise IndexError(
+                    f"No peaks found in {mode} CV of file {self._cv_obj.filepath}"
+                ) from error
             peak_xpos = in_volt[peak_idx]
         else:
             peaks = find_maximas(-in_curr, 5, 1)  # 5, 1 were found empirically
-            peak_idx = peaks[-1]
+            try:
+                peak_idx = peaks[-1]
+            except IndexError as error:
+                raise IndexError(
+                    f"No peaks found in {mode} CV of file {self._cv_obj.filepath}"
+                ) from error
             peak_xpos = in_volt[peak_idx]  # position of the first peak on x axis
 
         # Compute derivatives
@@ -306,11 +355,18 @@ class SCVAnalysis:
         edges = np.amin(volt), np.amax(volt)
         # Find clusters of data where each point is within volt/curr threshold
         # grouping function from utils
+
         clusters = grouping(
             volt_base, curr_d2_base, volt_thr, curr_thr, order=fit_type, edges=edges
         )
 
         cap_idx = clusters[0]
+
+        if len(cap_idx) <= 2:
+            raise ValueError(
+                f"Could not fit capacitive current for {mode} "
+                f"in {self._cv_obj.filepath}"
+            )
 
         # return indices of data to fit (on original, non averaged input)
         ci_min = cap_idx[0]
@@ -342,6 +398,7 @@ class SCVAnalysis:
             ip=ip,
             work_mode=mode,
             fit_mode="automatic",
+            auto_success=True,
             peak_base=ip_base,
             current_max=curr_max,
             peak_volt=peak_xpos,

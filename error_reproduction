@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Apr 25 11:44:01 2021
+
+@author: mattia
+"""
+
+import sys
+import matplotlib
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
+import matplotlib.animation as animation
+
+from PyQt5 import QtCore, QtWidgets
+
+matplotlib.use("Qt5Agg")
+
+
+class MplCanvas(FigureCanvasQTAgg):
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = fig.add_subplot(111)
+
+        super().__init__(fig)
+
+        self._ani = None
+        self.plots = None
+        self.loop = None
+
+    def animation(self):
+        self.plot = [self.axes.plot([], [])[0]]
+
+        self._ani = animation.FuncAnimation(
+            self.figure,
+            self._animate_test,
+            init_func=self._init_test,
+            interval=40,
+            blit=True,
+        )
+        self.figure.canvas.mpl_connect("button_press_event", self._on_mouse_click)
+
+        self.loop = QtCore.QEventLoop()
+        self.loop.exec()
+
+        self._ani.event_source.stop()
+
+    def _init_test(self):
+        return self.plot
+
+    def _animate_test(self, i):
+        print(f"Running animation with frame {i}")
+
+        return self.plot
+
+    def _on_mouse_click(self, event):
+        self.loop.quit()
+
+
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setObjectName("MainWindow")
+        self.resize(1000, 600)
+
+        self.centralwidget = QtWidgets.QWidget()
+        self.horizontal_layout = QtWidgets.QHBoxLayout()
+
+        self.centralwidget.setLayout(self.horizontal_layout)
+
+        self.mpl_canvas = MplCanvas(self.centralwidget)
+        self.button = QtWidgets.QToolButton(self.centralwidget)
+        self.button.setText("Test button")
+
+        self.horizontal_layout.addWidget(self.mpl_canvas)
+        self.horizontal_layout.addWidget(self.button)
+
+        self.button.clicked.connect(self._button_clicked)
+
+        self.setCentralWidget(self.centralwidget)
+
+    def _button_clicked(self):
+        self.mpl_canvas.animation()
+
+
+app = QtWidgets.QApplication(sys.argv)
+
+window = MainWindow()
+window.show()
+app.exec()
+
+sys.exit()
