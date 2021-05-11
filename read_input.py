@@ -44,6 +44,28 @@ class CyclicVoltammetry:
         if extension.lower() == "":
             print("No file selected")
 
+    def _read_MPT(self):
+        with open(self.filepath, "r", encoding="utf8", errors="ignore") as f:
+            iterator = iter(f)  # iterator avoids checking settings after header
+            
+            for line in iterator:
+                if "Nb header lines" in line:
+                    skiprows = int(line.split()[4])
+            
+            self.data = pd.read_csv(
+                self.filepath,
+                sep="\t",
+                skiprows=skiprows-1,
+                decimal=",",
+                )
+            
+            uniques = self.data["cycle number"].value_counts()  #
+            self.settings["n_cycles"] = len(uniques)
+            self.data.rename(columns={'time/s': 'T', 'Ewe/V': 'Vf', '<I>/mA': 'Im', 'cycle number': 'Cycle n'}, inplace=True)
+                                      
+            self.data = self.data[["Cycle n", "T", "Vf", "Im"]]
+            self.data.set_index("Cycle n", inplace=True)
+            
     def _read_DTA(self):
         # only consider data after label CURVE\d and ignore CURVEOCV
         is_it_curve = re.compile("CURVE\d")
@@ -138,8 +160,6 @@ class CyclicVoltammetry:
 
         plt.plot(volt, curr)
 
-    def _read_MPT(self):
-        pass
 
     def __getitem__(self, key):
         """

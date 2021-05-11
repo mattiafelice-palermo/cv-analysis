@@ -13,20 +13,24 @@ import os
 import glob
 from sys import exit
 
-folder = r"/home/mattia/Downloads/DTAs/"
+# folder = r"/home/mattia/Downloads/DTAs/"
 
-files = []
-glob = glob.glob(folder + "*")
+# files = []
+# glob = glob.glob(folder + "*")
 # glob.sort(key=os.path.getmtime)
 
-for i, filename in enumerate(glob):
-    print(i, filename)
-    path = os.path.join(folder, filename)
-    files.append(path)
+# for i, filename in enumerate(glob):
+#     print(i, filename)
+#     path = os.path.join(folder, filename)
+#     files.append(path)
 
 
-path = files[10]
-print(path)
+#path = files[10]
+path = r"/home/mattia/Downloads/DTAs/PtvsPt_Mn(IV)-Mn(II)_CV_10mVs_06-16_C03.mpt"
+data = CyclicVoltammetry(path)
+
+
+exit()
 
 data = CyclicVoltammetry(path)
 analysis = SCVAnalysis(data, 2)
