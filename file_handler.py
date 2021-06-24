@@ -25,7 +25,12 @@ class FileHandler:
             if not os.path.isfile(filename):
                 continue
             filepath = os.path.join(folder, filename)
-            cv = CyclicVoltammetry(filepath)
+            try:
+                cv = CyclicVoltammetry(filepath)
+            # the following should be fixed with a custom FileTypeError
+            except Exception:
+                print("hey there")
+                continue
             self.cvs[filepath] = cv
 
             n_cycles = cv.settings["n_cycles"]

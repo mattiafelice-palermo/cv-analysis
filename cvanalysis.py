@@ -191,6 +191,9 @@ class SCVAnalysis:
         settings = self._cv_obj.settings
         voltage_diff = settings["final voltage"] - settings["initial voltage"]
 
+        print(self._cv_obj.settings["filename"])
+        print(voltage_diff)
+
         voltage = self.voltage
         current = self.current
         times = self.times
@@ -203,6 +206,9 @@ class SCVAnalysis:
 
         else:
             split = np.argmax(self.voltage) + 1
+
+        print(split)
+        # print(voltage)
 
         self.ox_voltage = voltage[:split]
         self.ox_current = current[:split]
