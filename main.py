@@ -82,25 +82,31 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             analysis = self.file_handler.analyses[filepath][cycle]
 
-            # Values of ip and voltage shown in main interface
-            if analysis.anode_data.error is None:
-                ipa_curr = analysis.anode_data.ip
-                ipa_volt = analysis.anode_data.peak_volt
-            else:
-                ipa_curr, ipa_volt = "Automatic failed", "Automatic failed"
-
-            if analysis.cathode_data.error is None:
-                ipc_curr = analysis.cathode_data.ip
-                ipc_volt = analysis.cathode_data.peak_volt
-            else:
-                ipc_curr, ipc_volt = "Automatic failed", "Automatic failed"
-
-            self.anode_ip_value.setText(str(ipa_curr))
-            self.anode_ippos_value.setText(str(ipa_volt))
-            self.cathode_ip_value.setText(str(ipc_curr))
-            self.cathode_ippos_value.setText(str(ipc_volt))
+            self.update_ipvalues()
 
             self.MplCanvas.cv_plot(filepath, cycle, self.MplCanvas_checkbox_states())
+
+    def update_ipvalues(self):
+        (filepath, cycle) = self.selected_cv
+        analysis = self.file_handler.analyses[filepath][cycle]
+
+        # Values of ip and voltage shown in main interface
+        if analysis.anode_data.error is None:
+            ipa_curr = analysis.anode_data.ip
+            ipa_volt = analysis.anode_data.peak_volt
+        else:
+            ipa_curr, ipa_volt = "Automatic failed", "Automatic failed"
+
+        if analysis.cathode_data.error is None:
+            ipc_curr = analysis.cathode_data.ip
+            ipc_volt = analysis.cathode_data.peak_volt
+        else:
+            ipc_curr, ipc_volt = "Automatic failed", "Automatic failed"
+
+        self.anode_ip_value.setText(str(ipa_curr))
+        self.anode_ippos_value.setText(str(ipa_volt))
+        self.cathode_ip_value.setText(str(ipc_curr))
+        self.cathode_ippos_value.setText(str(ipc_volt))
 
     def MplCanvas_checkbox_changed(self, s=None):
         if self.selected_cv is not None:
@@ -159,6 +165,34 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             analysis.anode_data.fit_data_bool = None  # to be implemented
 
             print(analysis.anode_data)
+
+        self.update_ipvalues()
+
+        if checkboxes.cathode_curr:
+            max_data = self.MplCanvas.animated_plot(
+                (analysis.red_voltage, analysis.red_current), bg_data, plot="minimum",
+            )
+
+            fit_data = self.MplCanvas.animated_plot(
+                (analysis.red_voltage, analysis.red_current),
+                bg_data,
+                plot="linefit",
+                other=max_data[0],
+            )
+
+            analysis.cathode_data.ip = fit_data[1]
+            analysis.cathode_data.fit_mode = "manual"
+            analysis.cathode_data.error = None
+            analysis.cathode_data.peak_base = fit_data[0]
+            analysis.cathode_data.current_max = max_data[0][1]
+            analysis.cathode_data.peak_volt = max_data[0][0]
+            analysis.cathode_data.peak_index = max_data[1]
+            analysis.cathode_data.capacitive_fit = None
+            analysis.cathode_data.fit_data_bool = None  # to be implemented
+
+            print(analysis.cathode_data)
+
+        self.update_ipvalues()
 
         self.MplCanvas.cv_plot(filepath, cycle, self.MplCanvas_checkbox_states())
 
