@@ -311,11 +311,9 @@ class MplCanvas(FigureCanvasQTAgg):
                 self.plots["intercept"].set_data([fit_x2, fit_x2], [fit_y2, peak[1]])
                 self.plots["text"].set_text(str(peak[1] - fit_y2))
                 self.plots["text"].set_position([fit_x2, fit_y2])
-                intercept_base = fit_y2
+                self.return_data = fit_y2, peak[1] - fit_y2  # intercept base and ip
 
         if len(self.clicks) == 2:
-            # print(dir(self._ani.event_source))
-            # print(dir(self._ani.event_source))
             self.clicks = []
             self.loop.quit()
 

@@ -82,6 +82,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             analysis = self.file_handler.analyses[filepath][cycle]
 
+            # Values of ip and voltage shown in main interface
             if analysis.anode_data.error is None:
                 ipa_curr = analysis.anode_data.ip
                 ipa_volt = analysis.anode_data.peak_volt
@@ -136,20 +137,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             bg_data = (analysis.red_voltage, analysis.red_current)
 
         if checkboxes.anode_curr:
-            # max_data = self.MplCanvas.animated_plot(
-            #     (analysis.ox_voltage, analysis.ox_current), bg_data, plot="maximum",
-            # )
             max_data = self.MplCanvas.animated_plot(
                 (analysis.ox_voltage, analysis.ox_current), bg_data, plot="maximum",
             )
-
-            print(max_data)
-
-            # objgraph.show_backrefs(
-            #     self.MplCanvas.a,
-            #     max_depth=5,
-            #     filename="/home/mattia/Pictures/test2.png",
-            # )
 
             fit_data = self.MplCanvas.animated_plot(
                 (analysis.ox_voltage, analysis.ox_current),
@@ -158,12 +148,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 other=max_data[0],
             )
 
-            # objgraph.show_backrefs(
-            #     self.MplCanvas._ani,
-            #     max_depth=5,
-            #     filename="/home/mattia/Pictures/test2.png",
-            # )
-        # self.layout().setSizeConstraint(QLayout.SetMinAndMaxSize)
+            analysis.anode_data.ip = fit_data[1]
+            analysis.anode_data.fit_mode = "manual"
+            analysis.anode_data.error = None
+            analysis.anode_data.peak_base = fit_data[0]
+            analysis.anode_data.current_max = max_data[0][1]
+            analysis.anode_data.peak_volt = max_data[0][0]
+            analysis.anode_data.peak_index = max_data[1]
+            analysis.anode_data.capacitive_fit = None
+            analysis.anode_data.fit_data_bool = None  # to be implemented
+
+            print(analysis.anode_data)
+
         self.MplCanvas.cv_plot(filepath, cycle, self.MplCanvas_checkbox_states())
 
 
@@ -173,4 +169,3 @@ window = MainWindow()
 window.show()
 
 sys.exit(app.exec())
-
