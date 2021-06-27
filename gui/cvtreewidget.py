@@ -30,6 +30,7 @@ class CVTreeWidget(QTreeWidget):
         self.itemClicked.connect(self.parent.on_CVTreeWidget_select)
 
     def filetree_update(self):
+        self.clear() # eliminate all items to avoid duplicating entries...
         items = []
 
         # index for QTreeWidgetItem, this is still bogus for me...

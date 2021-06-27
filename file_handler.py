@@ -18,16 +18,23 @@ class FileHandler:
         self.cvs = {}  # filepath: cyclic voltammetry objects
         self.analyses = {}  # filepath: SCVAnalysis objects
 
-    def add_folder(self, folder):
+    def open_folder(self, folder):
         globber = glob.glob(folder + "/*")
 
-        for filename in globber:
-            if not os.path.isfile(filename):
+        self.open_files(globber) 
+    
+    def open_files(self, filepaths):
+        for filepath in filepaths:
+            if not os.path.isfile(filepath):
                 continue
-            filepath = os.path.join(folder, filename)
+            # Fixes mixed slashes/blackslashes, so that filepath can be unique key
+            # Thanks Windows.
+            filepath = os.path.normpath(filepath)
+            
+            # Try reading cyclicvoltammetry file
             try:
                 cv = CyclicVoltammetry(filepath)
-            # the following should be fixed with a custom FileTypeError
+            # TODO: the following should be fixed with a custom FileTypeError
             except Exception:
                 print(f"Could not read file {filepath}")
                 continue
@@ -48,10 +55,6 @@ class FileHandler:
 
                 analysis.compute_ip()
                 self.analyses[filepath].append(analysis)
-
-    # Likely not used: to be deleted soon
-    #def add_cvs(self, filepath):
-    #    self.cvs[filepath] = CyclicVoltammetry(filepath)
 
     def __iter__(self):
         for key in self.cvs:

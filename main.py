@@ -37,9 +37,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # File menu entries
         file_menu = menu.addMenu("&File")
         
-        open_file_action = QAction(QIcon(r"icons/folder-plus.svg"), "Open file", self)
-        open_file_action.triggered.connect(self.open_file)
-        file_menu.addAction(open_file_action)
+        open_files_action = QAction(QIcon(r"icons/folder-plus.svg"), "Open file(s)", self)
+        open_files_action.triggered.connect(self.open_files)
+        file_menu.addAction(open_files_action)
         
         open_folder_action = QAction(QIcon(r"icons/folder-plus.svg"), "Open folder", self)
         open_folder_action.triggered.connect(self.open_folder)
@@ -74,13 +74,19 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Fit button
         self.manual_fit_button.clicked.connect(self.manual_fit)
 
-    def open_file(self):
-        pass
+    def open_files(self):
+        filenames = QFileDialog.getOpenFileNames(self, "Select file(s)")
+        self.file_handler.open_files(filenames[0]) # 0th element contains filenames
+        self.CVTreeWidget.filetree_update()
+        
+        print(self.file_handler.cvs)
 
     def open_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select folder")
-        self.file_handler.add_folder(folder)
+        self.file_handler.open_folder(folder)
         self.CVTreeWidget.filetree_update()
+        
+        print(self.file_handler.cvs)
         
 
     def on_CVTreeWidget_select(self, obj, col):
