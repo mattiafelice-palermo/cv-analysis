@@ -189,21 +189,27 @@ class SCVAnalysis:
         # find maxima in voltage and split voltage and current in two arrays
         # at that point
         settings = self._cv_obj.settings
-        voltage_diff = settings['final voltage'] - settings['initial voltage']
-        
+        voltage_diff = settings["final voltage"] - settings["initial voltage"]
+
+        print(self._cv_obj.settings["filename"])
+        print(voltage_diff)
+
         voltage = self.voltage
-        current= self.current
+        current = self.current
         times = self.times
-        
+
         if voltage_diff < 0:
             split = np.argmin(self.voltage) + 1
             voltage = np.flip(voltage)
             current = np.flip(current)
             times = np.flip(times)
-            
+
         else:
             split = np.argmax(self.voltage) + 1
-       
+
+        print(split)
+        # print(voltage)
+
         self.ox_voltage = voltage[:split]
         self.ox_current = current[:split]
         self.ox_times = times[:split]

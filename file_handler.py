@@ -25,19 +25,33 @@ class FileHandler:
             if not os.path.isfile(filename):
                 continue
             filepath = os.path.join(folder, filename)
-            cv = CyclicVoltammetry(filepath)
+            try:
+                cv = CyclicVoltammetry(filepath)
+            # the following should be fixed with a custom FileTypeError
+            except Exception:
+                print(f"Could not read file {filepath}")
+                continue
             self.cvs[filepath] = cv
 
             n_cycles = cv.settings["n_cycles"]
 
             self.analyses[filepath] = []
+
             for cycle in range(n_cycles):
-                analysis = SCVAnalysis(cv, cycle)
+                try:
+                    analysis = SCVAnalysis(cv, cycle)
+                # If analysis fails for any reason, discard cycle (e.g. single point cycle)
+                except Exception:
+                    cv.settings["n_cycles"] -= 1
+                    print(f"Invalid cycle {cycle} in file {filepath}")
+                    continue
+
                 analysis.compute_ip()
                 self.analyses[filepath].append(analysis)
 
-    def add_cvs(self, filepath):
-        self.cvs[filepath] = CyclicVoltammetry(filepath)
+    # Likely not used: to be deleted soon
+    #def add_cvs(self, filepath):
+    #    self.cvs[filepath] = CyclicVoltammetry(filepath)
 
     def __iter__(self):
         for key in self.cvs:

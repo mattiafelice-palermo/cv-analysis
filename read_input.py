@@ -35,37 +35,55 @@ class CyclicVoltammetry:
             self.settings["file_rootname"] = root
             self.settings["extension"] = "dta"
             self._read_DTA()
-        if extension.lower() == ".mpt":
+        elif extension.lower() == ".mpt":
             self.settings["format"] = "Biologic"
             self.settings["filename"] = filename
             self.settings["extension"] = "mpt"
             self.settings["file_rootname"] = root
             self._read_MPT()
-        if extension.lower() == "":
+        elif extension.lower() == "":
             print("No file selected")
+            raise ValueError
+        else:
+            # if extension is not recognized, raise error
+            raise ValueError
 
     def _read_MPT(self):
         with open(self.filepath, "r", encoding="utf8", errors="ignore") as f:
             iterator = iter(f)  # iterator avoids checking settings after header
-            
+
             for line in iterator:
                 if "Nb header lines" in line:
                     skiprows = int(line.split()[4])
-            
+                elif "Ei (V)" in line:
+                    v_init = line.replace(",", ".").split()[2]
+                    self.settings["initial voltage"] = float(v_init)
+                elif "E1 (V)" in line:
+                    v_final = line.replace(",", ".").split()[2]
+                    self.settings["final voltage"] = float(v_final)
+                elif "mode	ox/red	error" in line:
+                    break
+
             self.data = pd.read_csv(
-                self.filepath,
-                sep="\t",
-                skiprows=skiprows-1,
-                decimal=",",
-                )
-            
+                self.filepath, sep="\t", skiprows=skiprows - 1, decimal=",",
+            )
+
             uniques = self.data["cycle number"].value_counts()  #
             self.settings["n_cycles"] = len(uniques)
-            self.data.rename(columns={'time/s': 'T', 'Ewe/V': 'Vf', '<I>/mA': 'Im', 'cycle number': 'Cycle n'}, inplace=True)
-                                      
+            self.data.rename(
+                columns={
+                    "time/s": "T",
+                    "Ewe/V": "Vf",
+                    "<I>/mA": "Im",
+                    "cycle number": "Cycle n",
+                },
+                inplace=True,
+            )
+
             self.data = self.data[["Cycle n", "T", "Vf", "Im"]]
+            self.data["Cycle n"] -= 1  # switch to 0 based cycle indexing
             self.data.set_index("Cycle n", inplace=True)
-            
+
     def _read_DTA(self):
         # only consider data after label CURVE\d and ignore CURVEOCV
         is_it_curve = re.compile("CURVE\d")
@@ -79,15 +97,24 @@ class CyclicVoltammetry:
                 if "SCANRATE" in line:
                     scanrate = line.replace(",", ".").split("\t")[2]
                     self.settings["scan rate"] = float(scanrate)
+                elif "VINIT" in line:
+                    v_init = line.replace(",", ".").split("\t")[2]
+                    self.settings["initial voltage"] = float(v_init)
                 elif "VLIMIT1" in line:
-                    vlimit_i = line.replace(",", ".").split("\t")[2]
-                    self.settings["initial voltage"] = float(vlimit_i)
+                    vlimit_1 = line.replace(",", ".").split("\t")[2]
+                    self.settings["vlimit 1"] = float(vlimit_1)
                 elif "VLIMIT2" in line:
-                    vlimit_f = line.replace(",", ".").split("\t")[2]
-                    self.settings["final voltage"] = float(vlimit_f)
-                elif "INSTRUMENTVERSION" in line:    
+                    vlimit_2 = line.replace(",", ".").split("\t")[2]
+                    self.settings["vlimit 2"] = float(vlimit_2)
+                elif "INSTRUMENTVERSION" in line:
                     break
 
+            # Find peak (either maximum or minimum) in voltage scan...
+            # This is gamry nonsense :@
+            if float(v_init) == float(vlimit_1):
+                self.settings["final voltage"] = float(vlimit_2)
+            else:
+                self.settings["final voltage"] = float(vlimit_1)
             file_format = None
             header = None
 
@@ -111,7 +138,7 @@ class CyclicVoltammetry:
             useful_keys = ["Cycle n", "T", "Vf", "Im"]
 
             if file_format == "Single table":
-                header = header.replace("Cycle\n", "Cycle n")
+                header = header.replace("Cycle", "Cycle n")
                 header = header.split("\t")
                 self.data = pd.read_csv(
                     self.filepath,
@@ -159,7 +186,6 @@ class CyclicVoltammetry:
         plt.ylabel("i [mA]")
 
         plt.plot(volt, curr)
-
 
     def __getitem__(self, key):
         """
