@@ -49,8 +49,9 @@ class FileHandler:
                 analysis.compute_ip()
                 self.analyses[filepath].append(analysis)
 
-    def add_cvs(self, filepath):
-        self.cvs[filepath] = CyclicVoltammetry(filepath)
+    # Likely not used: to be deleted soon
+    #def add_cvs(self, filepath):
+    #    self.cvs[filepath] = CyclicVoltammetry(filepath)
 
     def __iter__(self):
         for key in self.cvs:

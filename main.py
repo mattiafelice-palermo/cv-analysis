@@ -23,18 +23,27 @@ from gui.GUI_dataclasses import MplChekboxStates
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
+        # Inherit interface from QTDesigner generated .py
         self.setupUi(self)
+        
+        # Communication "channel" for QTreeWidget data
         self.usrtype = (
             QtWidgets.QTreeWidgetItem.UserType
-        )  # communication channel for data
+        )
 
         # Menubar
         menu = self.menubar
-
+        
+        # File menu entries
         file_menu = menu.addMenu("&File")
-        add_folder_action = QAction(QIcon("icons/folder-plus.svg"), "Add folder", self)
-        add_folder_action.triggered.connect(self.add_folder)
-        file_menu.addAction(add_folder_action)
+        
+        open_file_action = QAction(QIcon(r"icons/folder-plus.svg"), "Open file", self)
+        open_file_action.triggered.connect(self.open_file)
+        file_menu.addAction(open_file_action)
+        
+        open_folder_action = QAction(QIcon(r"icons/folder-plus.svg"), "Open folder", self)
+        open_folder_action.triggered.connect(self.open_folder)
+        file_menu.addAction(open_folder_action)
 
         # Manage files
         self.file_handler = FileHandler()
@@ -65,10 +74,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Fit button
         self.manual_fit_button.clicked.connect(self.manual_fit)
 
-    def add_folder(self):
+    def open_file(self):
+        pass
+
+    def open_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select folder")
         self.file_handler.add_folder(folder)
         self.CVTreeWidget.filetree_update()
+        
 
     def on_CVTreeWidget_select(self, obj, col):
         parent = obj.parent()
